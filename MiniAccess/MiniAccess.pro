@@ -10,10 +10,12 @@ CONFIG += c++17
 
 SOURCES += \
     main.cpp \
-    cframe.cpp
+    cframe.cpp \
+    vista_prueba.cpp
 
 HEADERS += \
-    cframe.h
+    cframe.h \
+    vista_prueba.h
 
 FORMS += \
     cframe.ui
