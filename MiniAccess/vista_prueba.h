@@ -1,77 +1,66 @@
 #ifndef VISTA_PRUEBA_H
 #define VISTA_PRUEBA_H
 
-#include <QWidget>
-#include <QStyledItemDelegate>
+#include <QMainWindow>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
+#include <QTabWidget>
+#include <QGroupBox>
+#include <QToolButton>
+#include <QTableWidget>
+#include <QComboBox>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QGridLayout>
+#include <QFrame>
+#include <QFileDialog>
+#include <QTextStream>
+#include <QLabel>
+#include <QSpacerItem>
 
-class QListWidget;
-class QLineEdit;
-class QTabBar;
-class QToolBar;
-class QTableWidget;
-class QStatusBar;
-class QLabel;
-class QComboBox;
-class QSpinBox;
-class QCheckBox;
-class QMenu;
-
-// Delegate que muestra un QComboBox para el tipo de dato
-class CampoTipoDelegate : public QStyledItemDelegate
-{
-    Q_OBJECT
-public:
-    explicit CampoTipoDelegate(QObject *parent = nullptr);
-    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option,
-                          const QModelIndex &index) const override;
-    void setEditorData(QWidget *editor, const QModelIndex &index) const override;
-    void setModelData(QWidget *editor, QAbstractItemModel *model,
-                      const QModelIndex &index) const override;
-private:
-    QStringList tipos() const;
-};
-
-class VistaPrueba : public QWidget
+class VistaPrueba : public QMainWindow
 {
     Q_OBJECT
 public:
     explicit VistaPrueba(QWidget *parent = nullptr);
     ~VistaPrueba() override = default;
 
+private slots:
+    void abrirDisenioTabla();
+    void agregarFilaCampo();
+    void eliminarFilaCampo();
+    void guardarMeta();
+    void onCeldaEditada(int, int);
+
 private:
-    void construirUI();
-    void poblarDemo();
-    void construirCintaInicio();     // acciones de "Inicio"
-    void construirCintaCrear();      // acciones de "Crear"
-    void conectarEventos();
+    // Construcción
+    void construirMenus();
+    void construirCinta();
+    QWidget* crearPaginaCampos();
+    QWidget* crearPaginaTabla();
+    void construirVistaDisenio();
+    void aplicarEstiloAccess();
+    QToolButton* botonRibbon(const QString& texto, const QString& icono = QString());
+    QGroupBox* grupoRibbon(const QString& titulo, const QList<QToolButton*>& botones);
 
-    // Izquierda
-    QListWidget *panelTablas{};
-    QLineEdit   *buscadorTablas{};
+    // Utilitarios
+    QComboBox* comboTipos(QWidget *parent = nullptr) const;
+    void asegurarFilaEditableAlFinal();
 
-    // Superior (cinta)
-    QTabBar     *tabCinta{};
-    QToolBar    *barraCinta{};
+private:
+    // Menú
+    QMenu   *menuCrear = nullptr;
+    QAction *actDisenioTabla = nullptr;
 
-    // Centro
-    QTableWidget *tabla{};
+    // Cinta
+    QWidget    *central = nullptr;
+    QVBoxLayout *layCentral = nullptr;
+    QTabWidget *cinta = nullptr;
 
-    // Menú contextual de tipos
-    QMenu       *menuTipos{};
-
-    // Derecha (propiedades mínimas)
-    QWidget     *panelDerecho{};
-    QComboBox   *cbTipoDato{};
-    QSpinBox    *spTamCampo{};
-    QComboBox   *cbFormato{};
-    QCheckBox   *chkRequerido{};
-    QCheckBox   *chkUnico{};
-    QCheckBox   *chkIndexado{};
-
-    // Inferior
-    QStatusBar  *status{};
-    QLineEdit   *busquedaRapida{};
+    // Vista de diseño
+    QFrame       *barraInferior = nullptr;
+    QTableWidget *tablaDisenio = nullptr;
 };
 
 #endif // VISTA_PRUEBA_H
-

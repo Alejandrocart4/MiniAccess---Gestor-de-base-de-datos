@@ -1,296 +1,409 @@
 #include "vista_prueba.h"
-
-#include <QListWidget>
-#include <QLineEdit>
-#include <QLabel>
-#include <QTabBar>
-#include <QToolBar>
-#include <QAction>
-#include <QTableWidget>
-#include <QHeaderView>
-#include <QStatusBar>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
-#include <QFormLayout>
-#include <QGroupBox>
-#include <QFrame>
-#include <QComboBox>
-#include <QSpinBox>
-#include <QCheckBox>
-#include <QPushButton>
-#include <QMenu>
-#include <QMouseEvent>
 #include <QApplication>
+#include <QHeaderView>
+#include <QMessageBox>
+#include <QPushButton>
 
-// ---------- Implementación del delegate ----------
+VistaPrueba::VistaPrueba(QWidget *parent)
+    : QMainWindow(parent)
+{
+    setWindowTitle("MiniAccess - Diseño de tabla");
+    resize(1200, 720);
 
-CampoTipoDelegate::CampoTipoDelegate(QObject *parent)
-    : QStyledItemDelegate(parent) {}
+    aplicarEstiloAccess();
+    construirMenus();
 
-QStringList CampoTipoDelegate::tipos() const {
-    return {"int","float","bool","char[N]","string","fecha","moneda"};
+    // Contenedor central
+    central   = new QWidget(this);
+    layCentral = new QVBoxLayout(central);
+    layCentral->setContentsMargins(8,8,8,8);
+    layCentral->setSpacing(6);
+
+    construirCinta();
+    construirVistaDisenio();
+
+    setCentralWidget(central);
 }
 
-QWidget *CampoTipoDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &,
-                                         const QModelIndex &index) const {
-    // Solo permitir el combo en la columna "Haga clic para agregar" (columna 1)
-    if (index.column() != 1) return nullptr;
+/* =========================
+ *  Menús (fila superior)
+ * ========================= */
+void VistaPrueba::construirMenus()
+{
+    auto *mArchivo = menuBar()->addMenu(tr("Archivo"));
+    menuBar()->addMenu(tr("Inicio"));
+    auto *mCrear = menuBar()->addMenu(tr("Crear"));
+    menuBar()->addMenu(tr("Datos externos"));
+    menuBar()->addMenu(tr("Herramientas de base de datos"));
+    menuBar()->addMenu(tr("Ayuda"));
+
+    actDisenioTabla = new QAction(tr("Diseño de tabla"), this);
+    mCrear->addAction(actDisenioTabla);
+    connect(actDisenioTabla, &QAction::triggered, this, &VistaPrueba::abrirDisenioTabla);
+
+    // Acciones de archivo (placeholders)
+    mArchivo->addAction(tr("Guardar"), this, []{});
+    mArchivo->addAction(tr("Salir"), qApp, &QApplication::quit);
+}
+
+/* =========================
+ *  Cinta estilo Access
+ * ========================= */
+void VistaPrueba::construirCinta()
+{
+    cinta = new QTabWidget(central);
+    cinta->setDocumentMode(true);
+    cinta->setTabPosition(QTabWidget::North);
+
+    cinta->addTab(crearPaginaCampos(), tr("Campos de la tabla"));
+    cinta->addTab(crearPaginaTabla(),  tr("Tabla"));
+
+    layCentral->addWidget(cinta);
+}
+
+QToolButton* VistaPrueba::botonRibbon(const QString& texto, const QString& icono)
+{
+    auto *b = new QToolButton();
+    b->setText(texto);
+    b->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    b->setMinimumSize(96,72);
+    b->setIconSize(QSize(32,32));
+
+    if (!icono.isEmpty()) {
+        b->setIcon(QIcon(icono));
+    } else {
+        QPixmap px(32,32); px.fill(QColor("#b0b0b0")); // se ve en dark
+        b->setIcon(QIcon(px));
+    }
+    return b;
+}
+
+
+
+QGroupBox* VistaPrueba::grupoRibbon(const QString& titulo, const QList<QToolButton*>& botones)
+{
+    auto *g = new QGroupBox(titulo);
+    auto *grid = new QGridLayout(g);
+    grid->setContentsMargins(6,6,6,2);
+    grid->setHorizontalSpacing(10);
+    grid->setVerticalSpacing(6);
+
+    int col = 0;
+    for (auto *btn : botones) {
+        grid->addWidget(btn, 0, col++);
+    }
+    // separador inferior sutil (como en Access)
+    auto *sep = new QFrame();
+    sep->setFrameShape(QFrame::HLine);
+    sep->setFrameShadow(QFrame::Plain);
+    sep->setStyleSheet("color:#d0d0d0;");
+    grid->addWidget(sep, 1, 0, 1, col);
+
+    return g;
+}
+
+QWidget* VistaPrueba::crearPaginaCampos()
+{
+    auto *p = new QWidget();
+    auto *h = new QHBoxLayout(p);
+    h->setContentsMargins(8,8,8,8);
+    h->setSpacing(14);
+
+    // Grupos como en Access
+    auto *gProp = grupoRibbon(tr("Propiedades"), {
+                                                     botonRibbon(tr("Nombre y título")),
+                                                     botonRibbon(tr("Tamaño del campo")),
+                                                     botonRibbon(tr("Valor predeterminado"))
+                                                 });
+
+    auto *gBusq = grupoRibbon(tr("Búsquedas / Índices"), {
+                                                             botonRibbon(tr("Modificar búsquedas")),
+                                                             botonRibbon(tr("Índices (B/B+/B*)"))
+                                                         });
+
+    auto *gFormato = grupoRibbon(tr("Formato"), {
+                                                    botonRibbon(tr("Formato de datos")),
+                                                    botonRibbon(tr("Más formatos"))
+                                                });
+
+    auto *gVal = grupoRibbon(tr("Validación"), {
+                                                   botonRibbon(tr("Requerido")),
+                                                   botonRibbon(tr("Único")),
+                                                   botonRibbon(tr("Validación de campo"))
+                                               });
+
+    h->addWidget(gProp);
+    h->addWidget(gBusq);
+    h->addWidget(gFormato);
+    h->addWidget(gVal);
+    h->addStretch(1);
+
+    return p;
+}
+
+QWidget* VistaPrueba::crearPaginaTabla()
+{
+    auto *p = new QWidget();
+    auto *h = new QHBoxLayout(p);
+    h->setContentsMargins(8,8,8,8);
+    h->setSpacing(14);
+
+    auto *gTabla = grupoRibbon(tr("Tabla"), {
+                                                botonRibbon(tr("Guardar tabla")),
+                                                botonRibbon(tr("Relaciones")),
+                                                botonRibbon(tr("Propiedades"))
+                                            });
+
+    h->addWidget(gTabla);
+    h->addStretch(1);
+    return p;
+}
+
+/* =========================
+ *  Vista central (diseño)
+ * ========================= */
+void VistaPrueba::construirVistaDisenio()
+{
+    // Barra delgada separadora como Access
+    auto *sep = new QFrame();
+    sep->setFrameShape(QFrame::HLine);
+    sep->setFrameShadow(QFrame::Plain);
+    sep->setStyleSheet("color:#cfcfcf;");
+    layCentral->addWidget(sep);
+
+    // Barra inferior con acciones rápidas (Agregar / Eliminar / Guardar)
+    barraInferior = new QFrame(central);
+    auto *h = new QHBoxLayout(barraInferior);
+    h->setContentsMargins(0,0,0,0);
+    h->setSpacing(8);
+
+    auto *btnAgregar = new QPushButton(tr("Agregar campo"), barraInferior);
+    auto *btnEliminar = new QPushButton(tr("Eliminar campo"), barraInferior);
+    auto *spacer = new QWidget(); spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    auto *btnGuardar = new QPushButton(tr("Guardar meta"), barraInferior);
+
+    h->addWidget(btnAgregar);
+    h->addWidget(btnEliminar);
+    h->addWidget(spacer);
+    h->addWidget(btnGuardar);
+
+    layCentral->addWidget(barraInferior);
+
+    // Tabla de diseño
+    tablaDisenio = new QTableWidget(central);
+    tablaDisenio->setColumnCount(3);
+    tablaDisenio->setHorizontalHeaderLabels({tr("Nombre del campo"), tr("Tipo de datos"), tr("Descripción")});
+    tablaDisenio->horizontalHeader()->setStretchLastSection(true);
+    tablaDisenio->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    tablaDisenio->horizontalHeader()->setHighlightSections(false);
+    tablaDisenio->verticalHeader()->setVisible(false);
+    tablaDisenio->setEditTriggers(QAbstractItemView::AllEditTriggers);
+    tablaDisenio->setSelectionBehavior(QAbstractItemView::SelectRows);
+    tablaDisenio->setSelectionMode(QAbstractItemView::SingleSelection);
+    tablaDisenio->setAlternatingRowColors(true);
+    tablaDisenio->setShowGrid(true);
+    tablaDisenio->setGridStyle(Qt::SolidLine);
+    tablaDisenio->setStyleSheet("QTableWidget { gridline-color:#e0e0e0; }");
+    tablaDisenio->setRowCount(1);
+    tablaDisenio->setItem(0,0,new QTableWidgetItem());
+    tablaDisenio->setCellWidget(0,1, comboTipos(tablaDisenio));
+    tablaDisenio->setItem(0,2,new QTableWidgetItem());
+    tablaDisenio->setRowHeight(0, 26);
+
+    tablaDisenio->setStyleSheet(
+        "QTableWidget::item:selected{background:#0a62ff;color:#ffffff;}"
+        "QTableWidget{selection-background-color:#0a62ff; selection-color:#ffffff;}"
+        );
+
+    layCentral->addWidget(tablaDisenio, 1);
+
+    // Conectar acciones
+    connect(btnAgregar, &QPushButton::clicked, this, &VistaPrueba::agregarFilaCampo);
+    connect(btnEliminar, &QPushButton::clicked, this, &VistaPrueba::eliminarFilaCampo);
+    connect(btnGuardar, &QPushButton::clicked, this, &VistaPrueba::guardarMeta);
+    connect(tablaDisenio, &QTableWidget::cellChanged, this, &VistaPrueba::onCeldaEditada);
+}
+
+void VistaPrueba::aplicarEstiloAccess()
+{
+    // Tema oscuro tipo Access “dark”
+    qApp->setStyleSheet(R"CSS(
+        /* Fondo general */
+        QMainWindow, QWidget { background:#1f2125; color:#e6e6e6; }
+
+        /* Menú superior */
+        QMenuBar { background:#1f2125; border-bottom:1px solid #2b2e34; }
+        QMenuBar::item { padding:6px 12px; color:#e6e6e6; }
+        QMenuBar::item:selected { background:#2a2e35; border:1px solid #3b4250; }
+
+        /* Pestañas (cinta) */
+        QTabWidget::pane { border:1px solid #2b2e34; background:#1f2125; }
+        QTabBar::tab {
+            background:#262a31; color:#dcdcdc;
+            border:1px solid #2f333b; padding:8px 14px; margin-right:2px;
+        }
+        QTabBar::tab:selected {
+            background:#2e3340; border-color:#44506b; color:#ffffff;
+        }
+
+        /* Grupos de la cinta */
+        QGroupBox {
+            background:#24282f; color:#d7d7d7;
+            border:1px solid #2f333b; border-radius:4px;
+            margin-top:24px;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin; subcontrol-position: top center;
+            padding:0 6px; color:#c8c8c8; font-weight:600;
+        }
+
+        /* Botones grandes estilo ribbon */
+        QToolButton {
+            background:#2a2e35; color:#e6e6e6;
+            border:1px solid #3a3f47; border-radius:3px;
+            padding:6px;
+        }
+        QToolButton:hover { background:#333945; border-color:#4a5870; }
+        QToolButton:pressed { background:#394152; }
+
+        /* Botones normales */
+        QPushButton {
+            background:#2a2e35; color:#e6e6e6;
+            border:1px solid #3a3f47; padding:6px 12px; border-radius:3px;
+        }
+        QPushButton:hover { background:#333945; border-color:#4a5870; }
+        QPushButton:pressed { background:#394152; }
+
+        /* Tabla de diseño */
+        QHeaderView::section {
+            background:#2a2e35; color:#f0f0f0;
+            border:1px solid #3a3f47; padding:6px; font-weight:600;
+        }
+        QTableWidget {
+            background:#1f2125; alternate-background-color:#22252b;
+            color:#e6e6e6; gridline-color:#333945;
+            selection-background-color:#0a62ff;   /* azul Access-like */
+            selection-color:#ffffff;
+        }
+        QTableWidget::item:selected { background:#0a62ff; color:#ffffff; }
+
+        /* Celdas de edición */
+        QLineEdit, QTextEdit, QPlainTextEdit {
+            background:#24282f; color:#e6e6e6; border:1px solid #3a3f47; border-radius:3px;
+            selection-background-color:#0a62ff; selection-color:#ffffff;
+        }
+
+        /* ComboBox + desplegable oscuro */
+        QComboBox {
+            background:#24282f; color:#e6e6e6; border:1px solid #3a3f47; border-radius:3px;
+            padding:3px 6px;
+        }
+        QComboBox::drop-down { border-left:1px solid #3a3f47; width:18px; }
+        QComboBox QAbstractItemView {
+            background:#24282f; color:#e6e6e6; selection-background-color:#0a62ff;
+            selection-color:#ffffff; outline:0; border:1px solid #3a3f47;
+        }
+
+        /* Separadores sutiles */
+        QFrame[frameShape="4"] { color:#2b2e34; } /* QFrame::HLine */
+    )CSS");
+}
+
+
+/* =========================
+ *  Utilitarios
+ * ========================= */
+QComboBox* VistaPrueba::comboTipos(QWidget *parent) const
+{
     auto *cb = new QComboBox(parent);
-    cb->addItems(tipos());
+    cb->addItems({"int","float","bool","char[N]","string","fecha","moneda"});
     cb->setEditable(false);
     return cb;
 }
 
-void CampoTipoDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const {
-    auto *cb = qobject_cast<QComboBox*>(editor);
-    if (!cb) return;
-    const QString value = index.data(Qt::EditRole).toString();
-    const int pos = cb->findText(value);
-    cb->setCurrentIndex(pos >= 0 ? pos : 0);
-}
-
-void CampoTipoDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
-                                     const QModelIndex &index) const {
-    auto *cb = qobject_cast<QComboBox*>(editor);
-    if (!cb) return;
-    model->setData(index, cb->currentText(), Qt::EditRole);
-}
-
-// ---------- Utilidad ----------
-static QFrame* separadorLinea(Qt::Orientation o = Qt::Horizontal) {
-    auto *s = new QFrame();
-    s->setFrameShape(o == Qt::Horizontal ? QFrame::HLine : QFrame::VLine);
-    s->setFrameShadow(QFrame::Sunken);
-    return s;
-}
-
-// ---------- VistaPrueba ----------
-
-VistaPrueba::VistaPrueba(QWidget *parent)
-    : QWidget(parent)
+void VistaPrueba::asegurarFilaEditableAlFinal()
 {
-    construirUI();
-    poblarDemo();
-    conectarEventos();
-}
-
-void VistaPrueba::construirUI()
-{
-    auto *root = new QHBoxLayout(this);
-    root->setContentsMargins(6,6,6,6);
-    root->setSpacing(8);
-
-    // ---------------- IZQUIERDA ----------------
-    auto *leftWrap = new QWidget();
-    auto *left = new QVBoxLayout(leftWrap);
-    left->setSpacing(6);
-
-    auto *lblTodos = new QLabel("Todos los objetos");
-    lblTodos->setStyleSheet("font-weight:600;");
-
-    buscadorTablas = new QLineEdit();
-    buscadorTablas->setPlaceholderText("Buscar tablas...");
-    buscadorTablas->setClearButtonEnabled(true);
-
-    panelTablas = new QListWidget();
-    panelTablas->setMinimumWidth(220);
-    panelTablas->setAlternatingRowColors(true);
-
-    auto *btnNuevaTabla = new QPushButton("+ Tabla");
-
-    left->addWidget(lblTodos);
-    left->addWidget(buscadorTablas);
-    left->addWidget(panelTablas, 1);
-    left->addWidget(btnNuevaTabla);
-
-    root->addWidget(leftWrap, 2);
-
-    // ---------------- CENTRO (CINTA + TABLA) ----------------
-    auto *centerWrap = new QWidget();
-    auto *center = new QVBoxLayout(centerWrap);
-    center->setSpacing(6);
-
-    // Cinta: tabs + toolbar
-    tabCinta = new QTabBar();
-    tabCinta->addTab("Inicio");
-    tabCinta->addTab("Crear");
-    tabCinta->addTab("Datos externos");
-    tabCinta->addTab("Herramientas de base de datos");
-    tabCinta->addTab("Ayuda");
-    tabCinta->addTab("Campos de la tabla");
-    tabCinta->addTab("Tabla");
-    tabCinta->setExpanding(false);
-
-    barraCinta = new QToolBar();
-    barraCinta->setIconSize(QSize(16,16));
-    construirCintaInicio(); // por defecto
-
-    auto *lineSup = separadorLinea(Qt::Horizontal);
-
-    // Tabla central
-    tabla = new QTableWidget();
-    tabla->setColumnCount(2);
-    tabla->setHorizontalHeaderLabels({"Id", "Haga clic para agregar"});
-    tabla->horizontalHeader()->setStretchLastSection(true);
-    tabla->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    tabla->verticalHeader()->setVisible(false);
-    tabla->setAlternatingRowColors(true);
-    tabla->setSelectionBehavior(QAbstractItemView::SelectRows);
-    tabla->setSelectionMode(QAbstractItemView::SingleSelection);
-    tabla->setEditTriggers(QAbstractItemView::AllEditTriggers);
-    tabla->setShowGrid(true);
-
-    // Delegate para el ComboBox en columna 1
-    tabla->setItemDelegateForColumn(1, new CampoTipoDelegate(tabla));
-
-    // Menú contextual con los mismos tipos (clic derecho)
-    menuTipos = new QMenu(this);
-    for (const auto &t : QStringList({"int","float","bool","char[N]","string","fecha","moneda"})) {
-        QAction *act = menuTipos->addAction(t);
-        connect(act, &QAction::triggered, this, [=](){
-            auto idx = tabla->currentIndex();
-            if (idx.isValid() && idx.column() == 1)
-                tabla->model()->setData(idx, t, Qt::EditRole);
-        });
+    int last = tablaDisenio->rowCount() - 1;
+    if (last < 0) return;
+    auto *it = tablaDisenio->item(last,0);
+    bool vacia = (!it) || it->text().trimmed().isEmpty();
+    if (!vacia) {
+        int r = tablaDisenio->rowCount();
+        tablaDisenio->insertRow(r);
+        tablaDisenio->setItem(r,0,new QTableWidgetItem());
+        tablaDisenio->setCellWidget(r,1, comboTipos(tablaDisenio));
+        tablaDisenio->setItem(r,2,new QTableWidgetItem());
+        tablaDisenio->setRowHeight(r, 26);
     }
-
-    // Barra de estado
-    status = new QStatusBar();
-    status->showMessage("Registro: 0 de 0");
-    auto *lblBuscar = new QLabel("Buscar:");
-    busquedaRapida = new QLineEdit();
-    busquedaRapida->setPlaceholderText("Buscar en la tabla...");
-    status->addPermanentWidget(lblBuscar);
-    status->addPermanentWidget(busquedaRapida, 1);
-
-    center->addWidget(tabCinta);
-    center->addWidget(barraCinta);
-    center->addWidget(lineSup);
-    center->addWidget(tabla, 1);
-    center->addWidget(status);
-
-    root->addWidget(centerWrap, 7);
-
-    // ---------------- DERECHA (propiedades resumidas) ----------------
-    panelDerecho = new QWidget();
-    auto *right = new QVBoxLayout(panelDerecho);
-    right->setSpacing(6);
-
-    auto *lblQue = new QLabel("¿Qué desea hacer?");
-    lblQue->setStyleSheet("font-weight:600;");
-
-    auto *gbProps = new QGroupBox("Propiedades de campo");
-    auto *formProps = new QFormLayout(gbProps);
-
-    cbTipoDato = new QComboBox(); cbTipoDato->addItems({"int","float","bool","char[N]","string","fecha","moneda"});
-    spTamCampo = new QSpinBox();  spTamCampo->setRange(1,1024); spTamCampo->setValue(255);
-    cbFormato  = new QComboBox(); cbFormato->addItems({"—","DD-MM-YY","DD/MM/YY","DD/MESTEXTO/YYYY","Lps","$","€","Millares"});
-    chkRequerido = new QCheckBox("Requerido");
-    chkUnico     = new QCheckBox("Único");
-    chkIndexado  = new QCheckBox("Indexado");
-
-    formProps->addRow("Tipo de datos:", cbTipoDato);
-    formProps->addRow("Tamaño de campo:", spTamCampo);
-    formProps->addRow("Formato:", cbFormato);
-    formProps->addRow(chkRequerido);
-    formProps->addRow(chkUnico);
-    formProps->addRow(chkIndexado);
-
-    right->addWidget(lblQue);
-    right->addWidget(gbProps);
-    right->addStretch(1);
-
-    root->addWidget(panelDerecho, 3);
-
-    // -------- Estilos --------
-    setStyleSheet(R"(
-        QToolBar { border: none; }
-        QTabBar::tab { padding: 6px 12px; }
-        QTabBar::tab:selected { font-weight:600; }
-        QHeaderView::section {
-            background: #1f1f1f; color: #eaeaea;
-            padding: 6px; border: 1px solid #3a3a3a;
-        }
-        QTableWidget { gridline-color: #3a3a3a; }
-        QGroupBox { font-weight:600; margin-top: 8px; }
-        QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 4px; }
-    )");
 }
 
-void VistaPrueba::construirCintaInicio()
+/* =========================
+ *  Slots
+ * ========================= */
+void VistaPrueba::abrirDisenioTabla()
 {
-    barraCinta->clear();
-    // Portapapeles
-    barraCinta->addAction("Pegar");
-    barraCinta->addSeparator();
-    // Orden y filtro
-    barraCinta->addAction("Cortar");
-    barraCinta->addAction("Copiar");
-    barraCinta->addSeparator();
-    barraCinta->addAction("Ascendente");
-    barraCinta->addAction("Descendente");
-    barraCinta->addAction("Filtro");
-    barraCinta->addSeparator();
-    // Registro
-    barraCinta->addAction("Nuevo");
-    barraCinta->addAction("Guardar");
-    barraCinta->addAction("Eliminar");
-    barraCinta->addSeparator();
-    // Buscar
-    barraCinta->addAction("Buscar");
-    barraCinta->addAction("Ir a");
-    barraCinta->addAction("Seleccionar");
+    cinta->setCurrentIndex(0);              // “Campos de la tabla”
+    if (tablaDisenio)
+        tablaDisenio->setCurrentCell(0,0);
 }
 
-void VistaPrueba::construirCintaCrear()
+void VistaPrueba::agregarFilaCampo()
 {
-    barraCinta->clear();
-    barraCinta->addAction("Tabla");
-    barraCinta->addAction("Vista de tabla");
-    barraCinta->addAction("Índice B");
-    barraCinta->addAction("Índice B+");
-    barraCinta->addAction("Índice B*");
+    int r = tablaDisenio->rowCount();
+    tablaDisenio->insertRow(r);
+    tablaDisenio->setItem(r,0,new QTableWidgetItem());
+    tablaDisenio->setCellWidget(r,1, comboTipos(tablaDisenio));
+    tablaDisenio->setItem(r,2,new QTableWidgetItem());
+    tablaDisenio->setRowHeight(r, 26);
+    tablaDisenio->setCurrentCell(r,0);
 }
 
-void VistaPrueba::poblarDemo()
+void VistaPrueba::eliminarFilaCampo()
 {
-    // Tablas ejemplo
-    panelTablas->addItem("Tabla1");
-    panelTablas->addItem("TablaClientes");
-    panelTablas->addItem("TablaCursos");
-
-    // Fila "(Nuevo)"
-    tabla->setRowCount(1);
-    tabla->setItem(0, 0, new QTableWidgetItem("(Nuevo)"));
-    tabla->setItem(0, 1, new QTableWidgetItem("")); // aquí se abrirá el combo
-
-    status->showMessage(QString("Registro: %1 de %2").arg(1).arg(1));
+    int fila = tablaDisenio->currentRow();
+    if (fila < 0) {
+        QMessageBox::information(this, tr("Eliminar campo"), tr("Selecciona una fila."));
+        return;
+    }
+    if (tablaDisenio->rowCount() == 1) {
+        tablaDisenio->setItem(0,0,new QTableWidgetItem());
+        tablaDisenio->setCellWidget(0,1, comboTipos(tablaDisenio));
+        tablaDisenio->setItem(0,2,new QTableWidgetItem());
+        return;
+    }
+    tablaDisenio->removeRow(fila);
 }
 
-void VistaPrueba::conectarEventos()
+void VistaPrueba::guardarMeta()
 {
-    // Cambiar acciones mostradas según pestaña de cinta
-    connect(tabCinta, &QTabBar::currentChanged, this, [this](int idx){
-        const QString t = tabCinta->tabText(idx);
-        if (t == "Inicio") construirCintaInicio();
-        else if (t == "Crear") construirCintaCrear();
-        else { barraCinta->clear(); barraCinta->addAction(t); } // placeholders
-    });
+    QString ruta = QFileDialog::getSaveFileName(
+        this, tr("Guardar metadatos"), QString(), tr("Metadatos (*.meta);;Texto (*.txt)")
+        );
+    if (ruta.isEmpty()) return;
 
-    // Abrir combo automáticamente al hacer clic en columna "Haga clic para agregar"
-    connect(tabla, &QTableWidget::cellActivated, this, [this](int row, int col){
-        if (col == 1) {
-            tabla->editItem(tabla->item(row, col)); // dispara el delegate (QComboBox)
-        }
-    });
-
-    // Menú contextual con tipos (clic derecho)
-    tabla->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(tabla, &QTableWidget::customContextMenuRequested, this, [this](const QPoint &pos){
-        QModelIndex idx = tabla->indexAt(pos);
-        if (idx.isValid() && idx.column() == 1) {
-            menuTipos->exec(tabla->viewport()->mapToGlobal(pos));
-        }
-    });
+    QFile f(ruta);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Error"), tr("No se pudo abrir el archivo destino."));
+        return;
+    }
+    QTextStream out(&f);
+    out << "# MiniAccess meta (nombre,tipo,descripcion)\n";
+    for (int r=0; r<tablaDisenio->rowCount(); ++r) {
+        auto *nom = tablaDisenio->item(r,0);
+        auto *des = tablaDisenio->item(r,2);
+        auto *cb  = qobject_cast<QComboBox*>(tablaDisenio->cellWidget(r,1));
+        const QString sNom = nom? nom->text().trimmed(): "";
+        const QString sDes = des? des->text().trimmed(): "";
+        const QString sTip = cb? cb->currentText(): "";
+        if (sNom.isEmpty() && sDes.isEmpty() && sTip.isEmpty())
+            continue;
+        out << sNom << "," << sTip << "," << sDes << "\n";
+    }
+    f.close();
+    QMessageBox::information(this, tr("Guardado"), tr("Metadatos guardados."));
 }
 
+void VistaPrueba::onCeldaEditada(int, int)
+{
+    asegurarFilaEditableAlFinal();
+}
