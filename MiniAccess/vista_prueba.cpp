@@ -72,7 +72,7 @@ QToolButton* VistaPrueba::botonRibbon(const QString& texto, const QString& icono
     if (!icono.isEmpty()) {
         b->setIcon(QIcon(icono));
     } else {
-        QPixmap px(32,32); px.fill(QColor("#b0b0b0")); // se ve en dark
+        QPixmap px(32,32); px.fill(QColor("#b0b0b0"));
         b->setIcon(QIcon(px));
     }
     return b;
@@ -226,7 +226,7 @@ void VistaPrueba::construirVistaDisenio()
 
 void VistaPrueba::aplicarEstiloAccess()
 {
-    // Tema oscuro tipo Access “dark”
+
     qApp->setStyleSheet(R"CSS(
         /* Fondo general */
         QMainWindow, QWidget { background:#1f2125; color:#e6e6e6; }
